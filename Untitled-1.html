@@ -6,7 +6,7 @@
     <title>CYBERSEARCH - Sistem Menu Digital</title>
     
     <!-- Menghubungkan ke file CSS Anda -->
-    <link rel="stylesheet" href="Untitled-1.css">
+    <link rel="stylesheet" href="style.css">
     
     <!-- Import Google Font -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -28,7 +28,6 @@
     <!-- Scary Cyber Effects -->
     <div class="cyber-matrix"></div>
     <div class="glitch-overlay"></div>
-    <div class="data-stream"></div>
 
     <!-- Sidebar Toggle for Mobile -->
     <div class="sidebar-toggle" id="sidebarToggle">
@@ -58,6 +57,14 @@
                     autocomplete="off"
                 >
                 <span class="filter-hint">Filter cerdas dengan toleransi kesalahan ketik</span>
+            </div>
+        </div>
+
+        <!-- Category Filter (Ditambahkan) -->
+        <div class="category-filter">
+            <div class="filter-title">KATEGORI</div>
+            <div class="category-buttons" id="categoryButtons">
+                <!-- Kategori akan dimuat secara dinamis oleh JS -->
             </div>
         </div>
 
@@ -116,15 +123,11 @@
             </div>
             <div class="detail-body">
                 <div class="detail-text" id="detailText">MENU CONTENT</div>
+                <!-- Level Akses akan ditampilkan di sini -->
+                <div id="detailAccessLevel" style="margin-top: 10px;"></div>
             </div>
-            <div class="detail-actions">
-                <button class="copy-button" id="copyButton">
-                    <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24" style="display: inline-block; vertical-align: middle; margin-right: 4px;">
-                        <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14zm-7-2h2v-2h-2v2zm0-4h2v-2h-2v2zm0-4h2V7h-2v2z"/>
-                    </svg>
-                    SALIN
-                </button>
-                <span id="copySuccess" class="copy-success">Tersalin!</span>
+            <div class="detail-actions" id="detailActions">
+                <!-- Tombol aksi akan dimuat secara dinamis oleh JS -->
             </div>
         </div>
     </div>
@@ -175,6 +178,6 @@
     </div>
 
     <!-- Menghubungkan ke file JavaScript Anda -->
-    <script src="let sheetData = [];.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>
