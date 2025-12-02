@@ -176,196 +176,58 @@ function fuzzyMatch(query, text) {
     return bestMatch;
 }
 
-// Fetch data from Google Sheets with multiple fallback methods
-async function fetchSheetData() {
-    const sheetId = '1k5U_YwloyQsad7PT_DmXobkNycJ6bsV0zhE00TLmSIg';
+// NEW FUNCTION: Fetch data from GitHub repository
+async function fetchGitHubData() {
+    // GANTI 'ashen' dengan username GitHub Anda jika berbeda
+    // GANTI 'Percobaan' dengan nama repository Anda jika berbeda
+    const repoOwner = 'ashen'; 
+    const repoName = 'Percobaan'; 
+    const apiUrl = `https://api.github.com/repos/${repoOwner}/${repoName}/contents/`;
+
+    updateSystemStatus('MENGAMBIL DATA DARI GITHUB...', 'warning');
+    addTerminalLine(`Connecting to GitHub repository: ${repoOwner}/${repoName}`, 'warning');
     
-    updateSystemStatus('MENGAMBIL DATA...', 'warning');
-    addTerminalLine('Attempting to connect to database...', 'warning');
-    
-    // Method 1: Try to access the first sheet by gid=0
     try {
-        addTerminalLine('Method 1: Accessing sheet by gid=0...', 'normal');
-        const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&gid=0`;
-        
-        const response = await fetch(url);
+        const response = await fetch(apiUrl);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
+
+        const files = await response.json();
         
-        const text = await response.text();
-        
-        // Check if we got valid data
-        if (text.includes('google.visualization.Query.setResponse')) {
-            const json = JSON.parse(text.substring(47).slice(0, -2));
-            const rows = json.table.rows;
-            
-            sheetData = [];
-            for (let i = 0; i < rows.length; i++) {
-                const titleCell = rows[i].c[0];
-                const infoCell = rows[i].c[1];
-                
-                const title = titleCell && titleCell.v ? String(titleCell.v) : '';
-                const info = infoCell && infoCell.v ? String(infoCell.v) : '';
-                
-                if (title) {
-                    sheetData.push({ title: title.trim(), info: info.trim() });
-                }
-            }
-            
-            if (sheetData.length > 0) {
-                addTerminalLine(`SUCCESS: Loaded ${sheetData.length} menu items from database`, 'success');
-                updateSystemStatus('SISTEM ONLINE', 'success');
-                localStorage.setItem('cybersearch_data', JSON.stringify(sheetData));
-                localStorage.setItem('cybersearch_timestamp', new Date().toISOString());
-                filteredData = [...sheetData];
-                displayMenuItems();
-                updateDebugInfo();
-                return;
-            }
-        }
-    } catch (error) {
-        addTerminalLine(`Method 1 failed: ${error.message}`, 'error');
-        console.error('Method 1 error:', error);
-    }
-    
-    // Method 2: Try to access by sheet name "REPORTAN"
-    try {
-        addTerminalLine('Method 2: Accessing sheet by name "REPORTAN"...', 'normal');
-        const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=REPORTAN`;
-        
-        const response = await fetch(url);
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const text = await response.text();
-        
-        // Check if we got valid data
-        if (text.includes('google.visualization.Query.setResponse')) {
-            const json = JSON.parse(text.substring(47).slice(0, -2));
-            const rows = json.table.rows;
-            
-            sheetData = [];
-            for (let i = 0; i < rows.length; i++) {
-                const titleCell = rows[i].c[0];
-                const infoCell = rows[i].c[1];
-                
-                const title = titleCell && titleCell.v ? String(titleCell.v) : '';
-                const info = infoCell && infoCell.v ? String(infoCell.v) : '';
-                
-                if (title) {
-                    sheetData.push({ title: title.trim(), info: info.trim() });
-                }
-            }
-            
-            if (sheetData.length > 0) {
-                addTerminalLine(`SUCCESS: Loaded ${sheetData.length} menu items from REPORTAN sheet`, 'success');
-                updateSystemStatus('SISTEM ONLINE', 'success');
-                localStorage.setItem('cybersearch_data', JSON.stringify(sheetData));
-                localStorage.setItem('cybersearch_timestamp', new Date().toISOString());
-                filteredData = [...sheetData];
-                displayMenuItems();
-                updateDebugInfo();
-                return;
-            }
-        }
-    } catch (error) {
-        addTerminalLine(`Method 2 failed: ${error.message}`, 'error');
-        console.error('Method 2 error:', error);
-    }
-    
-    // Method 3: Try to get all sheets and access the first one
-    try {
-        addTerminalLine('Method 3: Getting all sheets...', 'normal');
-        const feedUrl = `https://spreadsheets.google.com/feeds/worksheets/${sheetId}/public/basic?alt=json`;
-        
-        const response = await fetch(feedUrl);
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const feedJson = await response.json();
-        if (feedJson.feed && feedJson.feed.entry && feedJson.feed.entry.length > 0) {
-            // Get the first sheet
-            const firstSheet = feedJson.feed.entry[0];
-            const sheetName = firstSheet.title.$t;
-            
-            addTerminalLine(`Found sheet: ${sheetName}`, 'normal');
-            
-            // Now try to access this sheet
-            const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
-            
-            const sheetResponse = await fetch(url);
-            if (!sheetResponse.ok) {
-                throw new Error(`HTTP error! status: ${sheetResponse.status}`);
-            }
-            
-            const sheetText = await sheetResponse.text();
-            
-            // Check if we got valid data
-            if (sheetText.includes('google.visualization.Query.setResponse')) {
-                const json = JSON.parse(sheetText.substring(47).slice(0, -2));
-                const rows = json.table.rows;
-                
-                sheetData = [];
-                for (let i = 0; i < rows.length; i++) {
-                    const titleCell = rows[i].c[0];
-                    const infoCell = rows[i].c[1];
-                    
-                    const title = titleCell && titleCell.v ? String(titleCell.v) : '';
-                    const info = infoCell && infoCell.v ? String(infoCell.v) : '';
-                    
-                    if (title) {
-                        sheetData.push({ title: title.trim(), info: info.trim() });
-                    }
-                }
-                
-                if (sheetData.length > 0) {
-                    addTerminalLine(`SUCCESS: Loaded ${sheetData.length} menu items from ${sheetName} sheet`, 'success');
-                    updateSystemStatus('SISTEM ONLINE', 'success');
-                    localStorage.setItem('cybersearch_data', JSON.stringify(sheetData));
-                    localStorage.setItem('cybersearch_timestamp', new Date().toISOString());
-                    filteredData = [...sheetData];
-                    displayMenuItems();
-                    updateDebugInfo();
-                    return;
+        sheetData = [];
+        for (const file of files) {
+            // Hanya tambahkan file, bukan folder
+            if (file.type === 'file') {
+                // Abaikan file HTML utama agar tidak muncul di menu
+                if (file.name !== 'Untitled-1.html') {
+                    sheetData.push({ 
+                        title: file.name, 
+                        info: `File tipe: ${file.name.split('.').pop()}` 
+                    });
                 }
             }
         }
-    } catch (error) {
-        addTerminalLine(`Method 3 failed: ${error.message}`, 'error');
-        console.error('Method 3 error:', error);
-    }
-    
-    // Method 4: Try to load from cache
-    try {
-        addTerminalLine('Method 4: Loading from cache...', 'normal');
-        const cachedData = localStorage.getItem('cybersearch_data');
-        if (cachedData) {
-            sheetData = JSON.parse(cachedData);
-            const timestamp = localStorage.getItem('cybersearch_timestamp');
-            addTerminalLine(`SUCCESS: Loaded ${sheetData.length} menu items from cache (${new Date(timestamp).toLocaleString()})`, 'success');
-            updateSystemStatus('SISTEM ONLINE (OFFLINE)', 'warning');
+
+        if (sheetData.length > 0) {
+            addTerminalLine(`SUCCESS: Loaded ${sheetData.length} files from GitHub`, 'success');
+            updateSystemStatus('SISTEM ONLINE (GITHUB)', 'success');
             filteredData = [...sheetData];
             displayMenuItems();
             updateDebugInfo();
             return;
         }
     } catch (error) {
-        addTerminalLine(`Method 4 failed: ${error.message}`, 'error');
-        console.error('Method 4 error:', error);
+        addTerminalLine(`ERROR: Failed to fetch from GitHub - ${error.message}`, 'error');
+        console.error('GitHub fetch error:', error);
     }
     
-    // Method 5: Use sample data as last resort
-    addTerminalLine('Method 5: Using sample data...', 'warning');
+    // Fallback ke data sampel jika GitHub gagal
+    addTerminalLine('Falling back to sample data...', 'warning');
     sheetData = [
-        { title: "MENU SAMPLE 1", info: "Ini adalah contoh menu karena database tidak dapat dijangkau. Silakan periksa koneksi internet Anda atau URL spreadsheet." },
-        { title: "MENU SAMPLE 2", info: "Sistem saat ini berjalan dalam mode offline dengan fungsionalitas terbatas." },
-        { title: "KESALAHAN KONEKSI", info: "Tidak dapat terhubung ke database Google Sheets. Silakan verifikasi ID spreadsheet dan pastikan dapat diakses publik." }
+        { title: "GAGAL MEMUAT DATA", info: "Tidak dapat mengambil data dari GitHub. Periksa nama repository dan koneksi internet." }
     ];
     
-    addTerminalLine(`WARNING: Using ${sheetData.length} sample menu items`, 'warning');
     updateSystemStatus('SISTEM OFFLINE', 'error');
     filteredData = [...sheetData];
     displayMenuItems();
@@ -391,7 +253,7 @@ function displayMenuItems() {
     
     container.innerHTML = filteredData.map((item, index) => `
         <div class="menu-item hologram cyber-border" data-index="${index}">
-            <div class="match-indicator">${item.matchType || 'MATCH'}</div>
+            <div class="match-indicator">${item.matchType || 'FILE'}</div>
             <h3 class="menu-title cyber-text" data-text="${item.title}">${item.title}</h3>
             <div class="menu-preview">${item.info}</div>
         </div>
@@ -419,7 +281,7 @@ function showDetail(item) {
     modal.classList.add('show');
     updateDebugInfo();
     
-    addTerminalLine(`Opening menu: ${item.title}`, 'normal');
+    addTerminalLine(`Opening file: ${item.title}`, 'normal');
 }
 
 // Hide detail modal
@@ -440,7 +302,7 @@ function copyToClipboard() {
         successElement.classList.add('show');
         
         // Add to terminal
-        addTerminalLine(`Data copied to clipboard: ${currentDetail.info.substring(0, 50)}${currentDetail.info.length > 50 ? '...' : ''}`, 'success');
+        addTerminalLine(`Data copied to clipboard: ${currentDetail.info}`, 'success');
         
         // Hide success message after 2 seconds
         setTimeout(() => {
@@ -724,6 +586,7 @@ window.onload = function() {
         });
     });
     
-    // Fetch data
-    fetchSheetData();
+    // GANTI PEMANGGILAN FUNGSI DI SINI
+    // DARI fetchSheetData() MENJADI fetchGitHubData()
+    fetchGitHubData();
 };
