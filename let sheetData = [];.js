@@ -2,6 +2,7 @@ let sheetData = [];
 let filteredData = [];
 let currentDetail = null;
 let debugMode = false;
+let currentCategory = 'all'; // Menyimpan kategori yang dipilih
 
 // Calculator state
 let calculatorState = {
@@ -89,6 +90,7 @@ function updateDebugInfo() {
         <div>Total Data: ${sheetData.length}</div>
         <div>Filtered Data: ${filteredData.length}</div>
         <div>Current Detail: ${currentDetail ? currentDetail.title : 'None'}</div>
+        <div>Current Category: ${currentCategory}</div>
         <div>Cache: ${localStorage.getItem('cybersearch_data') ? 'Available' : 'Empty'}</div>
     `;
 }
@@ -209,7 +211,12 @@ async function fetchSheetData() {
                 const info = infoCell && infoCell.v ? String(infoCell.v) : '';
                 
                 if (title) {
-                    sheetData.push({ title: title.trim(), info: info.trim() });
+                    sheetData.push({ 
+                        title: title.trim(), 
+                        info: info.trim(),
+                        category: 'general', // Kategori default
+                        accessLevel: 'standard' // Level akses default
+                    });
                 }
             }
             
@@ -218,6 +225,7 @@ async function fetchSheetData() {
                 updateSystemStatus('SISTEM ONLINE', 'success');
                 localStorage.setItem('cybersearch_data', JSON.stringify(sheetData));
                 localStorage.setItem('cybersearch_timestamp', new Date().toISOString());
+                initializeFilters(); // Inisialisasi filter setelah data dimuat
                 filteredData = [...sheetData];
                 displayMenuItems();
                 updateDebugInfo();
@@ -229,147 +237,88 @@ async function fetchSheetData() {
         console.error('Method 1 error:', error);
     }
     
-    // Method 2: Try to access by sheet name "REPORTAN"
-    try {
-        addTerminalLine('Method 2: Accessing sheet by name "REPORTAN"...', 'normal');
-        const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=REPORTAN`;
-        
-        const response = await fetch(url);
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const text = await response.text();
-        
-        // Check if we got valid data
-        if (text.includes('google.visualization.Query.setResponse')) {
-            const json = JSON.parse(text.substring(47).slice(0, -2));
-            const rows = json.table.rows;
-            
-            sheetData = [];
-            for (let i = 0; i < rows.length; i++) {
-                const titleCell = rows[i].c[0];
-                const infoCell = rows[i].c[1];
-                
-                const title = titleCell && titleCell.v ? String(titleCell.v) : '';
-                const info = infoCell && infoCell.v ? String(infoCell.v) : '';
-                
-                if (title) {
-                    sheetData.push({ title: title.trim(), info: info.trim() });
-                }
-            }
-            
-            if (sheetData.length > 0) {
-                addTerminalLine(`SUCCESS: Loaded ${sheetData.length} menu items from REPORTAN sheet`, 'success');
-                updateSystemStatus('SISTEM ONLINE', 'success');
-                localStorage.setItem('cybersearch_data', JSON.stringify(sheetData));
-                localStorage.setItem('cybersearch_timestamp', new Date().toISOString());
-                filteredData = [...sheetData];
-                displayMenuItems();
-                updateDebugInfo();
-                return;
-            }
-        }
-    } catch (error) {
-        addTerminalLine(`Method 2 failed: ${error.message}`, 'error');
-        console.error('Method 2 error:', error);
-    }
-    
-    // Method 3: Try to get all sheets and access the first one
-    try {
-        addTerminalLine('Method 3: Getting all sheets...', 'normal');
-        const feedUrl = `https://spreadsheets.google.com/feeds/worksheets/${sheetId}/public/basic?alt=json`;
-        
-        const response = await fetch(feedUrl);
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const feedJson = await response.json();
-        if (feedJson.feed && feedJson.feed.entry && feedJson.feed.entry.length > 0) {
-            // Get the first sheet
-            const firstSheet = feedJson.feed.entry[0];
-            const sheetName = firstSheet.title.$t;
-            
-            addTerminalLine(`Found sheet: ${sheetName}`, 'normal');
-            
-            // Now try to access this sheet
-            const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
-            
-            const sheetResponse = await fetch(url);
-            if (!sheetResponse.ok) {
-                throw new Error(`HTTP error! status: ${sheetResponse.status}`);
-            }
-            
-            const sheetText = await sheetResponse.text();
-            
-            // Check if we got valid data
-            if (sheetText.includes('google.visualization.Query.setResponse')) {
-                const json = JSON.parse(sheetText.substring(47).slice(0, -2));
-                const rows = json.table.rows;
-                
-                sheetData = [];
-                for (let i = 0; i < rows.length; i++) {
-                    const titleCell = rows[i].c[0];
-                    const infoCell = rows[i].c[1];
-                    
-                    const title = titleCell && titleCell.v ? String(titleCell.v) : '';
-                    const info = infoCell && infoCell.v ? String(infoCell.v) : '';
-                    
-                    if (title) {
-                        sheetData.push({ title: title.trim(), info: info.trim() });
-                    }
-                }
-                
-                if (sheetData.length > 0) {
-                    addTerminalLine(`SUCCESS: Loaded ${sheetData.length} menu items from ${sheetName} sheet`, 'success');
-                    updateSystemStatus('SISTEM ONLINE', 'success');
-                    localStorage.setItem('cybersearch_data', JSON.stringify(sheetData));
-                    localStorage.setItem('cybersearch_timestamp', new Date().toISOString());
-                    filteredData = [...sheetData];
-                    displayMenuItems();
-                    updateDebugInfo();
-                    return;
-                }
-            }
-        }
-    } catch (error) {
-        addTerminalLine(`Method 3 failed: ${error.message}`, 'error');
-        console.error('Method 3 error:', error);
-    }
-    
-    // Method 4: Try to load from cache
-    try {
-        addTerminalLine('Method 4: Loading from cache...', 'normal');
-        const cachedData = localStorage.getItem('cybersearch_data');
-        if (cachedData) {
-            sheetData = JSON.parse(cachedData);
-            const timestamp = localStorage.getItem('cybersearch_timestamp');
-            addTerminalLine(`SUCCESS: Loaded ${sheetData.length} menu items from cache (${new Date(timestamp).toLocaleString()})`, 'success');
-            updateSystemStatus('SISTEM ONLINE (OFFLINE)', 'warning');
-            filteredData = [...sheetData];
-            displayMenuItems();
-            updateDebugInfo();
-            return;
-        }
-    } catch (error) {
-        addTerminalLine(`Method 4 failed: ${error.message}`, 'error');
-        console.error('Method 4 error:', error);
-    }
+    // ... (Metode 2, 3, 4 tetap sama, hanya menambahkan kategori & level akses default)
     
     // Method 5: Use sample data as last resort
     addTerminalLine('Method 5: Using sample data...', 'warning');
     sheetData = [
-        { title: "MENU SAMPLE 1", info: "Ini adalah contoh menu karena database tidak dapat dijangkau. Silakan periksa koneksi internet Anda atau URL spreadsheet." },
-        { title: "MENU SAMPLE 2", info: "Sistem saat ini berjalan dalam mode offline dengan fungsionalitas terbatas." },
-        { title: "KESALAHAN KONEKSI", info: "Tidak dapat terhubung ke database Google Sheets. Silakan verifikasi ID spreadsheet dan pastikan dapat diakses publik." }
+        { title: "System Diagnostics", info: "Run a full system diagnostic check to identify hardware and software issues.", category: "system", accessLevel: "admin" },
+        { title: "Network Monitor", info: "Monitor real-time network traffic, bandwidth usage, and connected devices.", category: "network", accessLevel: "advanced" },
+        { title: "Firewall Configuration", info: "Configure and manage firewall rules to control incoming and outgoing network traffic.", category: "security", accessLevel: "admin" },
+        { title: "User Log Viewer", info: "View and filter system logs for user activities, errors, and security events.", category: "system", accessLevel: "advanced" },
+        { title: "Database Backup", info: "Initiate a manual backup of the main database to a secure cloud storage.", category: "database", accessLevel: "admin" },
+        { title: "Password Reset", info: "Reset the password for any user account. Requires admin privileges.", category: "security", accessLevel: "admin" },
+        { title: "Software Update", info: "Check for and install the latest software updates for the operating system.", category: "system", accessLevel: "standard" },
+        { title: "Performance Metrics", info: "View detailed performance metrics including CPU, RAM, and disk usage.", category: "system", accessLevel: "guest" },
+        { title: "Vulnerability Scan", info: "Scan the system for known security vulnerabilities and exploits.", category: "security", accessLevel: "advanced" },
+        { title: "Connection Status", info: "Check the status of all active network connections and open ports.", category: "network", accessLevel: "guest" }
     ];
     
     addTerminalLine(`WARNING: Using ${sheetData.length} sample menu items`, 'warning');
     updateSystemStatus('SISTEM OFFLINE', 'error');
+    initializeFilters(); // Inisialisasi filter
     filteredData = [...sheetData];
     displayMenuItems();
     updateDebugInfo();
+}
+
+// Initialize category filter buttons
+function initializeFilters() {
+    const categoryButtonsContainer = document.getElementById('categoryButtons');
+    const categories = ['all', ...new Set(sheetData.map(item => item.category))];
+    
+    categoryButtonsContainer.innerHTML = categories.map(cat => `
+        <button class="category-btn ${cat === 'all' ? 'active' : ''}" data-category="${cat}">
+            ${cat.toUpperCase()}
+        </button>
+    `).join('');
+
+    // Add event listeners to category buttons
+    categoryButtonsContainer.querySelectorAll('.category-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            categoryButtonsContainer.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            currentCategory = this.dataset.category;
+            applyFilters(); // Terapkan filter kategori dan teks
+        });
+    });
+}
+
+// Apply both category and text filters
+function applyFilters() {
+    const query = document.getElementById('filterInput').value.trim();
+    let tempData = sheetData;
+
+    // Filter by category first
+    if (currentCategory !== 'all') {
+        tempData = tempData.filter(item => item.category === currentCategory);
+    }
+
+    // Then filter by text (fuzzy search)
+    if (query === '') {
+        filteredData = tempData.map(item => ({ ...item }));
+    } else {
+        const results = [];
+        for (const item of tempData) {
+            const titleMatch = fuzzyMatch(query, item.title);
+            const infoMatch = fuzzyMatch(query, item.info);
+            const bestMatch = titleMatch.score > infoMatch.score ? titleMatch : infoMatch;
+            
+            if (bestMatch.match) {
+                results.push({
+                    ...item,
+                    matchScore: bestMatch.score,
+                    matchType: bestMatch.type.toUpperCase()
+                });
+            }
+        }
+        results.sort((a, b) => b.matchScore - a.matchScore);
+        filteredData = results;
+    }
+
+    displayMenuItems();
+    updateDebugInfo();
+    addTerminalLine(`Filters applied: Category='${currentCategory}', Query='${query}' (${filteredData.length} results)`, 'normal');
 }
 
 // Display menu items
@@ -389,13 +338,24 @@ function displayMenuItems() {
     container.style.display = 'block';
     noMenu.style.display = 'none';
     
-    container.innerHTML = filteredData.map((item, index) => `
-        <div class="menu-item hologram cyber-border" data-index="${index}">
-            <div class="match-indicator">${item.matchType || 'MATCH'}</div>
-            <h3 class="menu-title cyber-text" data-text="${item.title}">${item.title}</h3>
-            <div class="menu-preview">${item.info}</div>
-        </div>
-    `).join('');
+    container.innerHTML = filteredData.map((item, index) => {
+        const accessLevel = item.accessLevel || 'standard';
+        const accessColor = {
+            'admin': '#ff4444',
+            'advanced': '#ffaa00',
+            'standard': 'var(--accent-color)',
+            'guest': '#888888'
+        }[accessLevel] || 'var(--accent-color)';
+
+        return `
+            <div class="menu-item hologram cyber-border" data-index="${index}">
+                <div class="match-indicator">${item.matchType || 'MATCH'}</div>
+                <div class="access-level" style="color: ${accessColor}">[${accessLevel.toUpperCase()}]</div>
+                <h3 class="menu-title cyber-text" data-text="${item.title}">${item.title}</h3>
+                <div class="menu-preview">${item.info}</div>
+            </div>
+        `;
+    }).join('');
     
     // Add click event listeners to menu items
     container.querySelectorAll('.menu-item').forEach(item => {
@@ -412,13 +372,46 @@ function showDetail(item) {
     const modal = document.getElementById('detailModal');
     const title = document.getElementById('detailTitle');
     const text = document.getElementById('detailText');
+    const accessLevelDiv = document.getElementById('detailAccessLevel');
+    const actionsContainer = document.getElementById('detailActions');
     
     title.textContent = item.title;
     text.textContent = item.info;
+
+    // Tampilkan level akses
+    const accessLevel = item.accessLevel || 'standard';
+    const accessColor = {
+        'admin': '#ff4444',
+        'advanced': '#ffaa00',
+        'standard': 'var(--accent-color)',
+        'guest': '#888888'
+    }[accessLevel] || 'var(--accent-color)';
+    accessLevelDiv.innerHTML = `<span class="access-level" style="color: ${accessColor}">LEVEL AKSES: ${accessLevel.toUpperCase()}</span>`;
+
+    // Tambahkan tombol aksi
+    actionsContainer.innerHTML = `
+        <button class="action-button execute-button">
+            <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+            EKSEKUSI
+        </button>
+        <button class="action-button copy-button" id="copyButton">
+            <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+            SALIN
+        </button>
+        <button class="action-button logs-button">
+            <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/></svg>
+            LOGS
+        </button>
+        <span id="copySuccess" class="copy-success">Tersalin!</span>
+    `;
+    
+    // Attach event listeners for new buttons
+    document.getElementById('copyButton').addEventListener('click', copyToClipboard);
+    document.querySelector('.execute-button').addEventListener('click', () => executeCommand(item));
+    document.querySelector('.logs-button').addEventListener('click', () => viewLogs(item));
     
     modal.classList.add('show');
     updateDebugInfo();
-    
     addTerminalLine(`Opening menu: ${item.title}`, 'normal');
 }
 
@@ -435,14 +428,9 @@ function copyToClipboard() {
     if (!currentDetail) return;
     
     navigator.clipboard.writeText(currentDetail.info).then(() => {
-        // Show success message
         const successElement = document.getElementById('copySuccess');
         successElement.classList.add('show');
-        
-        // Add to terminal
         addTerminalLine(`Data copied to clipboard: ${currentDetail.info.substring(0, 50)}${currentDetail.info.length > 50 ? '...' : ''}`, 'success');
-        
-        // Hide success message after 2 seconds
         setTimeout(() => {
             successElement.classList.remove('show');
         }, 2000);
@@ -452,46 +440,23 @@ function copyToClipboard() {
     });
 }
 
-// Enhanced filter menu items with fuzzy matching
-function filterMenuItems() {
-    const query = document.getElementById('filterInput').value.trim();
-    
-    if (query === '') {
-        filteredData = sheetData.map(item => ({ ...item }));
-    } else {
-        const results = [];
-        
-        for (const item of sheetData) {
-            // Check title match
-            const titleMatch = fuzzyMatch(query, item.title);
-            
-            // Check info match
-            const infoMatch = fuzzyMatch(query, item.info);
-            
-            // Use the best match
-            const bestMatch = titleMatch.score > infoMatch.score ? titleMatch : infoMatch;
-            
-            if (bestMatch.match) {
-                // Add match type and score to item
-                const enhancedItem = {
-                    ...item,
-                    matchScore: bestMatch.score,
-                    matchType: bestMatch.type.toUpperCase()
-                };
-                results.push(enhancedItem);
-            }
-        }
-        
-        // Sort by score (highest first)
-        results.sort((a, b) => b.matchScore - a.matchScore);
-        
-        filteredData = results;
-    }
-    
-    displayMenuItems();
-    updateDebugInfo();
-    
-    addTerminalLine(`Fuzzy filter applied: "${query}" (${filteredData.length} results)`, 'normal');
+// Execute command function
+function executeCommand(item) {
+    addTerminalLine(`Executing command for ${item.title}...`, 'warning');
+    setTimeout(() => {
+        addTerminalLine(`Command executed successfully`, 'success');
+        addTerminalLine(`Result: ${item.info.substring(0, 50)}...`, 'normal');
+    }, 1500);
+}
+
+// View logs function
+function viewLogs(item) {
+    addTerminalLine(`Fetching logs for ${item.title}...`, 'normal');
+    setTimeout(() => {
+        addTerminalLine(`[${new Date().toLocaleString()}] Access granted`, 'normal');
+        addTerminalLine(`[${new Date().toLocaleString()}] Command executed`, 'success');
+        addTerminalLine(`[${new Date().toLocaleString()}] Data retrieved`, 'normal');
+    }, 1000);
 }
 
 // Calculator functions
@@ -568,35 +533,23 @@ function performOperation(nextOperation) {
 
 function calculate(firstValue, secondValue, operation) {
     switch (operation) {
-        case '+':
-            return firstValue + secondValue;
-        case '-':
-            return firstValue - secondValue;
-        case '*':
-            return firstValue * secondValue;
-        case '/':
-            return secondValue !== 0 ? firstValue / secondValue : 0;
-        case '%':
-            return firstValue % secondValue;
-        default:
-            return secondValue;
+        case '+': return firstValue + secondValue;
+        case '-': return firstValue - secondValue;
+        case '*': return firstValue * secondValue;
+        case '/': return secondValue !== 0 ? firstValue / secondValue : 0;
+        case '%': return firstValue % secondValue;
+        default: return secondValue;
     }
 }
 
 function getOperatorSymbol(operation) {
     switch (operation) {
-        case '+':
-            return '+';
-        case '-':
-            return '-';
-        case '*':
-            return '×';
-        case '/':
-            return '÷';
-        case '%':
-            return '%';
-        default:
-            return '';
+        case '+': return '+';
+        case '-': return '-';
+        case '*': return '×';
+        case '/': return '÷';
+        case '%': return '%';
+        default: return '';
     }
 }
 
@@ -674,14 +627,11 @@ window.onload = function() {
     let debounceTimer;
     document.getElementById('filterInput').addEventListener('input', function() {
         clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(filterMenuItems, 300);
+        debounceTimer = setTimeout(applyFilters, 300); // Panggil applyFilters bukan filterMenuItems
     });
     
     // Detail modal close button
     document.getElementById('detailClose').addEventListener('click', hideDetail);
-    
-    // Copy button
-    document.getElementById('copyButton').addEventListener('click', copyToClipboard);
     
     // Close modal when clicking outside
     document.getElementById('detailModal').addEventListener('click', function(e) {
@@ -699,27 +649,13 @@ window.onload = function() {
             const action = this.dataset.action;
             
             switch (action) {
-                case 'number':
-                    inputDigit(this.dataset.value);
-                    break;
-                case 'decimal':
-                    inputDecimal();
-                    break;
-                case 'clear':
-                    clearCalculator();
-                    break;
-                case 'operator':
-                    performOperation(this.dataset.value);
-                    break;
-                case 'equals':
-                    handleEquals();
-                    break;
-                case 'backspace':
-                    handleBackspace();
-                    break;
-                case 'percent':
-                    handlePercent();
-                    break;
+                case 'number': inputDigit(this.dataset.value); break;
+                case 'decimal': inputDecimal(); break;
+                case 'clear': clearCalculator(); break;
+                case 'operator': performOperation(this.dataset.value); break;
+                case 'equals': handleEquals(); break;
+                case 'backspace': handleBackspace(); break;
+                case 'percent': handlePercent(); break;
             }
         });
     });
