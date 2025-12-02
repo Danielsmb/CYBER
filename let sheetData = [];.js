@@ -237,7 +237,146 @@ async function fetchSheetData() {
         console.error('Method 1 error:', error);
     }
     
-    // ... (Metode 2, 3, 4 tetap sama, hanya menambahkan kategori & level akses default)
+    // Method 2: Try to access by sheet name "REPORTAN"
+    try {
+        addTerminalLine('Method 2: Accessing sheet by name "REPORTAN"...', 'normal');
+        const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=REPORTAN`;
+        
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const text = await response.text();
+        
+        // Check if we got valid data
+        if (text.includes('google.visualization.Query.setResponse')) {
+            const json = JSON.parse(text.substring(47).slice(0, -2));
+            const rows = json.table.rows;
+            
+            sheetData = [];
+            for (let i = 0; i < rows.length; i++) {
+                const titleCell = rows[i].c[0];
+                const infoCell = rows[i].c[1];
+                
+                const title = titleCell && titleCell.v ? String(titleCell.v) : '';
+                const info = infoCell && infoCell.v ? String(infoCell.v) : '';
+                
+                if (title) {
+                    sheetData.push({ 
+                        title: title.trim(), 
+                        info: info.trim(),
+                        category: 'general', // Kategori default
+                        accessLevel: 'standard' // Level akses default
+                    });
+                }
+            }
+            
+            if (sheetData.length > 0) {
+                addTerminalLine(`SUCCESS: Loaded ${sheetData.length} menu items from REPORTAN sheet`, 'success');
+                updateSystemStatus('SISTEM ONLINE', 'success');
+                localStorage.setItem('cybersearch_data', JSON.stringify(sheetData));
+                localStorage.setItem('cybersearch_timestamp', new Date().toISOString());
+                initializeFilters(); // Inisialisasi filter
+                filteredData = [...sheetData];
+                displayMenuItems();
+                updateDebugInfo();
+                return;
+            }
+        }
+    } catch (error) {
+        addTerminalLine(`Method 2 failed: ${error.message}`, 'error');
+        console.error('Method 2 error:', error);
+    }
+    
+    // Method 3: Try to get all sheets and access the first one
+    try {
+        addTerminalLine('Method 3: Getting all sheets...', 'normal');
+        const feedUrl = `https://spreadsheets.google.com/feeds/worksheets/${sheetId}/public/basic?alt=json`;
+        
+        const response = await fetch(feedUrl);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const feedJson = await response.json();
+        if (feedJson.feed && feedJson.feed.entry && feedJson.feed.entry.length > 0) {
+            // Get the first sheet
+            const firstSheet = feedJson.feed.entry[0];
+            const sheetName = firstSheet.title.$t;
+            
+            addTerminalLine(`Found sheet: ${sheetName}`, 'normal');
+            
+            // Now try to access this sheet
+            const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
+            
+            const sheetResponse = await fetch(url);
+            if (!sheetResponse.ok) {
+                throw new Error(`HTTP error! status: ${sheetResponse.status}`);
+            }
+            
+            const sheetText = await sheetResponse.text();
+            
+            // Check if we got valid data
+            if (sheetText.includes('google.visualization.Query.setResponse')) {
+                const json = JSON.parse(sheetText.substring(47).slice(0, -2));
+                const rows = json.table.rows;
+                
+                sheetData = [];
+                for (let i = 0; i < rows.length; i++) {
+                    const titleCell = rows[i].c[0];
+                    const infoCell = rows[i].c[1];
+                    
+                    const title = titleCell && titleCell.v ? String(titleCell.v) : '';
+                    const info = infoCell && infoCell.v ? String(infoCell.v) : '';
+                    
+                    if (title) {
+                        sheetData.push({ 
+                            title: title.trim(), 
+                            info: info.trim(),
+                            category: 'general', // Kategori default
+                            accessLevel: 'standard' // Level akses default
+                        });
+                    }
+                }
+                
+                if (sheetData.length > 0) {
+                    addTerminalLine(`SUCCESS: Loaded ${sheetData.length} menu items from ${sheetName} sheet`, 'success');
+                    updateSystemStatus('SISTEM ONLINE', 'success');
+                    localStorage.setItem('cybersearch_data', JSON.stringify(sheetData));
+                    localStorage.setItem('cybersearch_timestamp', new Date().toISOString());
+                    initializeFilters(); // Inisialisasi filter
+                    filteredData = [...sheetData];
+                    displayMenuItems();
+                    updateDebugInfo();
+                    return;
+                }
+            }
+        }
+    } catch (error) {
+        addTerminalLine(`Method 3 failed: ${error.message}`, 'error');
+        console.error('Method 3 error:', error);
+    }
+    
+    // Method 4: Try to load from cache
+    try {
+        addTerminalLine('Method 4: Loading from cache...', 'normal');
+        const cachedData = localStorage.getItem('cybersearch_data');
+        if (cachedData) {
+            sheetData = JSON.parse(cachedData);
+            const timestamp = localStorage.getItem('cybersearch_timestamp');
+            addTerminalLine(`SUCCESS: Loaded ${sheetData.length} menu items from cache (${new Date(timestamp).toLocaleString()})`, 'success');
+            updateSystemStatus('SISTEM ONLINE (OFFLINE)', 'warning');
+            initializeFilters(); // Inisialisasi filter
+            filteredData = [...sheetData];
+            displayMenuItems();
+            updateDebugInfo();
+            return;
+        }
+    } catch (error) {
+        addTerminalLine(`Method 4 failed: ${error.message}`, 'error');
+        console.error('Method 4 error:', error);
+    }
     
     // Method 5: Use sample data as last resort
     addTerminalLine('Method 5: Using sample data...', 'warning');
