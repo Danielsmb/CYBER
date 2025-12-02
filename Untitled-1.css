@@ -229,7 +229,7 @@ body {
     opacity: 0.7;
 }
 
-/* Category Filter (Ditambahkan) */
+/* Category Filter */
 .category-filter {
     padding: 15px 20px;
     border-bottom: 1px solid var(--border-color);
@@ -340,7 +340,7 @@ body {
     border-radius: 3px;
 }
 
-/* Access Level (Ditambahkan) */
+/* Access Level */
 .access-level {
     font-family: 'Orbitron', sans-serif;
     font-size: 0.7rem;
@@ -559,7 +559,7 @@ body {
     gap: 10px;
 }
 
-/* Action Buttons (Ditambahkan) */
+/* Action Buttons */
 .action-button {
     background: rgba(0, 0, 0, 0.3);
     border: 1px solid var(--border-color);
